@@ -11,11 +11,9 @@ class DataLoader:
         print(f" Reading: {self.file_path}")
         self.df = pd.read_csv(self.file_path)
         
-        # Basic cleaning
         self.df.dropna(how='all', axis=0, inplace=True)
         self.df.dropna(how='all', axis=1, inplace=True)
         
-        # SDV 1.x Metadata Detection
         self.metadata = Metadata.detect_from_dataframe(
             data=self.df,
             table_name='main_table'
