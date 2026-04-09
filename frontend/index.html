@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MIDST — Synthetic Data Audit Framework</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --md-bg:             #FFFBFE;
+  --md-on-bg:          #1C1B1F;
+  --md-primary:        #6750A4;
+  --md-on-primary:     #FFFFFF;
+  --md-sec-cont:       #E8DEF8;
+  --md-on-sec-cont:    #1D192B;
+  --md-tertiary:       #7D5260;
+  --md-surf-cont:      #F3EDF7;
+  --md-surf-low:       #E7E0EC;
+  --md-outline:        #79747E;
+  --md-on-surf-var:    #49454F;
+  --md-error:          #B3261E;
+  --md-success:        #386A20;
+  --md-warning:        #7B5800;
+  --ease: cubic-bezier(0.2,0,0,1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Roboto',sans-serif;background:var(--md-bg);color:var(--md-on-bg);min-height:100vh;overflow-x:hidden;}
+
+/* ── TOPBAR ── */
+.topbar{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 32px;height:64px;background:rgba(255,251,254,0.9);backdrop-filter:blur(12px);border-bottom:1px solid rgba(121,116,126,0.15);}
+.brand{display:flex;align-items:center;gap:10px;}
+.logo{width:36px;height:36px;border-radius:12px;background:var(--md-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:15px;}
+.brand-name{font-size:1.1rem;font-weight:700;color:var(--md-primary);letter-spacing:-.02em;}
+.brand-sub{font-size:.75rem;color:var(--md-on-surf-var);margin-top:1px;}
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.status-pill{display:flex;align-items:center;gap:6px;padding:5px 14px;border-radius:9999px;background:var(--md-surf-cont);font-size:.8rem;font-weight:500;color:var(--md-on-surf-var);}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#ccc;transition:background .3s;}
+.status-dot.running{background:#4CAF50;animation:pulse 1.2s ease-in-out infinite;}
+.status-dot.error{background:var(--md-error);}
+.status-dot.done{background:var(--md-success);}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.btn-run{display:flex;align-items:center;gap:8px;padding:9px 24px;border-radius:9999px;border:none;cursor:pointer;background:var(--md-primary);color:#fff;font-size:.875rem;font-weight:500;transition:all 300ms var(--ease);box-shadow:0 1px 3px rgba(0,0,0,.15);}
+.btn-run:hover:not(:disabled){background:rgba(103,80,164,.9);box-shadow:0 4px 14px rgba(103,80,164,.3);transform:translateY(-1px);}
+.btn-run:active:not(:disabled){transform:scale(.95);}
+.btn-run:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ── LAYOUT ── */
+.page{max-width:1300px;margin:0 auto;padding:28px 24px 64px;}
+
+/* ── SECTION LABELS ── */
+.sec-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px;}
+.sec-title{font-size:1.15rem;font-weight:700;color:var(--md-on-bg);letter-spacing:-.02em;}
+.sec-sub{font-size:.82rem;color:var(--md-on-surf-var);margin-top:3px;max-width:540px;line-height:1.5;}
+.badge{padding:4px 14px;border-radius:9999px;font-size:.75rem;font-weight:500;background:var(--md-sec-cont);color:var(--md-on-sec-cont);}
+
+/* ── TOOLTIP ── */
+.tip{position:relative;display:inline-block;cursor:help;}
+.tip-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:rgba(103,80,164,.15);color:var(--md-primary);font-size:10px;font-weight:700;margin-left:4px;vertical-align:middle;}
+.tip-box{display:none;position:absolute;z-index:200;left:50%;transform:translateX(-50%);bottom:calc(100% + 8px);width:260px;background:#2B2930;color:#ECE6F0;font-size:.78rem;font-weight:400;line-height:1.55;padding:10px 14px;border-radius:10px;pointer-events:none;}
+.tip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#2B2930;}
+.tip:hover .tip-box,.tip:focus .tip-box{display:block;}
+
+/* ── UPLOAD ZONE ── */
+.upload-zone{background:var(--md-surf-cont);border-radius:28px;padding:36px;margin-bottom:28px;position:relative;overflow:hidden;transition:all 300ms var(--ease);}
+.upload-zone.drag-over{box-shadow:0 0 0 3px var(--md-primary);background:rgba(103,80,164,.06);}
+.blur-orb{position:absolute;border-radius:50%;pointer-events:none;}
+.orb-a{width:280px;height:280px;background:var(--md-primary);opacity:.1;filter:blur(70px);top:-80px;right:-40px;}
+.orb-b{width:160px;height:160px;background:var(--md-tertiary);opacity:.12;filter:blur(56px);bottom:-30px;left:28%;}
+.upload-inner{position:relative;z-index:1;display:flex;gap:40px;align-items:center;}
+.upload-drop{flex:1;border:2px dashed rgba(103,80,164,.3);border-radius:20px;padding:32px 24px;text-align:center;cursor:pointer;transition:all 300ms var(--ease);}
+.upload-drop:hover{border-color:var(--md-primary);background:rgba(103,80,164,.04);}
+.upload-drop input{display:none;}
+.upload-icon{font-size:36px;margin-bottom:10px;}
+.upload-cta{font-size:1rem;font-weight:500;color:var(--md-primary);}
+.upload-hint{font-size:.8rem;color:var(--md-on-surf-var);margin-top:5px;}
+.file-info{display:none;margin-top:14px;padding:12px 16px;background:rgba(56,106,32,.08);border-radius:12px;text-align:left;}
+.file-info.show{display:block;}
+.file-name{font-size:.9rem;font-weight:500;color:var(--md-success);}
+.file-meta{font-size:.78rem;color:var(--md-on-surf-var);margin-top:3px;}
+.upload-stats{display:flex;flex-direction:column;gap:14px;min-width:220px;}
+.ustat{background:rgba(255,255,255,.7);backdrop-filter:blur(6px);border:1px solid rgba(121,116,126,.12);border-radius:16px;padding:16px 20px;transition:all 300ms var(--ease);}
+.ustat:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(103,80,164,.1);}
+.ustat-num{font-size:1.75rem;font-weight:700;color:var(--md-primary);line-height:1;}
+.ustat-label{font-size:.72rem;color:var(--md-on-surf-var);margin-top:3px;font-weight:500;}
+
+/* ── CONFIG GRID ── */
+.config-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-bottom:28px;}
+.cfg-card{background:var(--md-surf-cont);border-radius:20px;padding:22px 24px;transition:all 300ms var(--ease);}
+.cfg-card:hover{box-shadow:0 4px 14px rgba(103,80,164,.09);}
+.cfg-title{font-size:.72rem;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--md-on-surf-var);margin-bottom:16px;}
+.cfg-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.cfg-row:last-child{margin-bottom:0;}
+.cfg-key{font-size:.85rem;color:var(--md-on-bg);display:flex;align-items:center;}
+.cfg-val{font-size:.85rem;font-weight:500;color:var(--md-primary);background:rgba(103,80,164,.08);padding:2px 10px;border-radius:9999px;}
+
+/* MD3 TEXT INPUT */
+.md-field{position:relative;margin-bottom:14px;}
+.md-input{width:100%;height:52px;background:var(--md-surf-low);border:none;border-bottom:2px solid var(--md-outline);border-radius:10px 10px 0 0;padding:18px 14px 4px;font-family:'Roboto',sans-serif;font-size:.95rem;color:var(--md-on-bg);outline:none;transition:border-color 200ms var(--ease);}
+.md-input:focus{border-bottom-color:var(--md-primary);}
+.md-label{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:.95rem;color:rgba(28,27,31,.5);pointer-events:none;transition:all 200ms var(--ease);}
+.md-input:focus~.md-label,.md-input:not(:placeholder-shown)~.md-label{top:10px;font-size:.7rem;color:var(--md-primary);transform:none;}
+
+/* TOGGLE */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(121,116,126,.1);}
+.toggle-row:last-child{border-bottom:none;}
+.toggle-label-text{font-size:.875rem;color:var(--md-on-bg);}
+.toggle-sub-text{font-size:.72rem;color:var(--md-on-surf-var);margin-top:1px;}
+.toggle-switch{position:relative;width:50px;height:26px;background:var(--md-surf-low);border:2px solid var(--md-outline);border-radius:9999px;cursor:pointer;flex-shrink:0;transition:all 300ms var(--ease);}
+.toggle-switch.on{background:var(--md-primary);border-color:var(--md-primary);}
+.toggle-switch.disabled{opacity:.4;cursor:not-allowed;}
+.toggle-switch::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--md-outline);transition:all 300ms var(--ease);}
+.toggle-switch.on::after{left:26px;background:#fff;}
+
+/* SLIDER */
+.slider-section{margin-bottom:14px;}
+.slider-head{display:flex;justify-content:space-between;margin-bottom:6px;}
+.slider-name{font-size:.85rem;color:var(--md-on-bg);display:flex;align-items:center;}
+.slider-val{font-size:.85rem;font-weight:500;color:var(--md-primary);}
+.slider-track{width:100%;height:4px;border-radius:9999px;background:var(--md-surf-low);position:relative;cursor:pointer;}
+.slider-fill{height:100%;border-radius:9999px;background:var(--md-primary);pointer-events:none;}
+.slider-thumb{position:absolute;top:50%;transform:translate(-50%,-50%);width:18px;height:18px;border-radius:50%;background:var(--md-primary);box-shadow:0 2px 8px rgba(103,80,164,.4);transition:box-shadow 200ms var(--ease);pointer-events:none;}
+.slider-thumb:hover{box-shadow:0 0 0 8px rgba(103,80,164,.12),0 2px 8px rgba(103,80,164,.4);}
+
+/* ── PROGRESS BANNER ── */
+.progress-banner{display:none;background:var(--md-sec-cont);border-radius:16px;padding:14px 22px;margin-bottom:24px;align-items:center;gap:16px;}
+.progress-banner.show{display:flex;}
+.spinner{width:22px;height:22px;border-radius:50%;border:2.5px solid rgba(103,80,164,.2);border-top-color:var(--md-primary);animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress-text{flex:1;}
+.progress-step{font-size:.875rem;font-weight:500;color:var(--md-on-sec-cont);}
+.progress-sub{font-size:.75rem;color:var(--md-on-surf-var);margin-top:2px;}
+.prog-track{width:140px;height:4px;background:rgba(103,80,164,.15);border-radius:9999px;overflow:hidden;}
+.prog-fill{height:100%;background:var(--md-primary);border-radius:9999px;transition:width .6s var(--ease);}
+
+/* ── LIVE LOGS ── */
+.log-card{background:var(--md-surf-cont);border-radius:20px;overflow:hidden;margin-bottom:28px;}
+.log-header{padding:16px 22px;border-bottom:1px solid rgba(121,116,126,.1);display:flex;align-items:center;justify-content:space-between;}
+.log-body{background:#1C1B1F;padding:18px 20px;height:200px;overflow-y:auto;font-family:'Roboto Mono','Courier New',monospace;font-size:.78rem;line-height:1.7;}
+.log-line{margin-bottom:2px;}
+.log-line .ts{color:#79747E;margin-right:10px;}
+.log-line.info .msg{color:#C2B8E0;}
+.log-line.warn .msg{color:#FFB74D;}
+.log-line.error .msg{color:#EF9A9A;}
+.log-line.done .msg{color:#A5D6A7;font-weight:500;}
+.log-empty{color:#49454F;font-style:italic;}
+.btn-ghost{padding:5px 14px;border-radius:9999px;border:1px solid rgba(121,116,126,.3);background:transparent;color:var(--md-on-surf-var);font-size:.78rem;cursor:pointer;transition:all 200ms var(--ease);}
+.btn-ghost:hover{background:rgba(103,80,164,.06);border-color:var(--md-primary);color:var(--md-primary);}
+
+/* ── RESULTS (hidden until run) ── */
+.results-section{display:none;}
+.results-section.show{display:block;}
+
+/* ── MODEL CARDS ── */
+.models-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:24px;}
+.model-card{background:var(--md-surf-cont);border-radius:20px;overflow:hidden;transition:all 300ms var(--ease);box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.model-card:hover{box-shadow:0 8px 24px rgba(103,80,164,.13);transform:translateY(-3px);}
+.model-card:active{transform:scale(.98);}
+.model-card.winner{box-shadow:inset 0 0 0 2px var(--md-primary),0 4px 16px rgba(103,80,164,.15);}
+.mc-head{padding:18px 22px 14px;display:flex;align-items:flex-start;justify-content:space-between;}
+.mc-name{font-size:1.05rem;font-weight:700;letter-spacing:-.01em;}
+.mc-type{font-size:.72rem;color:var(--md-on-surf-var);margin-top:2px;}
+.mc-badge{padding:3px 12px;border-radius:9999px;font-size:.72rem;font-weight:500;}
+.mc-badge.best{background:var(--md-primary);color:#fff;}
+.mc-badge.pass{background:rgba(56,106,32,.12);color:var(--md-success);}
+.mc-badge.fail{background:rgba(179,38,30,.1);color:var(--md-error);}
+.mc-badge.skipped{background:rgba(121,116,126,.1);color:var(--md-on-surf-var);}
+.mc-div{height:1px;background:rgba(121,116,126,.1);margin:0 22px;}
+.mc-metrics{padding:14px 22px 18px;}
+.met-row{display:flex;align-items:center;margin-bottom:10px;}
+.met-row:last-child{margin-bottom:0;}
+.met-label{font-size:.78rem;color:var(--md-on-surf-var);width:120px;flex-shrink:0;display:flex;align-items:center;}
+.met-bar-wrap{flex:1;height:5px;background:var(--md-surf-low);border-radius:9999px;overflow:hidden;}
+.met-bar{height:100%;border-radius:9999px;transition:width .9s var(--ease);}
+.met-bar.risk{background:var(--md-error);}
+.met-bar.util{background:var(--md-success);}
+.met-bar.cmla{background:var(--md-tertiary);}
+.met-num{font-size:.78rem;font-weight:500;min-width:40px;text-align:right;margin-left:8px;}
+.met-num.good{color:var(--md-success);}
+.met-num.bad{color:var(--md-error);}
+.met-num.warn{color:var(--md-warning);}
+.mc-foot{padding:10px 22px;background:rgba(103,80,164,.04);border-top:1px solid rgba(121,116,126,.08);display:flex;justify-content:space-between;align-items:center;}
+.mc-score-label{font-size:.72rem;color:var(--md-on-surf-var);}
+.mc-score-val{font-size:1.15rem;font-weight:700;color:var(--md-primary);}
+
+/* ── BOTTOM GRID ── */
+.bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:28px;}
+.chart-card,.attack-card{background:var(--md-surf-cont);border-radius:20px;padding:24px;transition:all 300ms var(--ease);}
+.chart-card:hover,.attack-card:hover{box-shadow:0 4px 14px rgba(103,80,164,.09);}
+.chart-area{position:relative;height:210px;margin-top:18px;}
+.chart-svg{width:100%;height:100%;}
+.chart-legend{display:flex;gap:18px;margin-top:12px;}
+.leg-item{display:flex;align-items:center;gap:7px;font-size:.78rem;color:var(--md-on-surf-var);}
+.leg-dot{width:9px;height:9px;border-radius:50%;}
+.atk-item{padding:14px 0;border-bottom:1px solid rgba(121,116,126,.1);display:flex;align-items:center;gap:14px;transition:padding-left 200ms var(--ease);}
+.atk-item:last-child{border-bottom:none;padding-bottom:0;}
+.atk-item:hover{padding-left:6px;}
+.atk-icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;}
+.atk-icon.so{background:rgba(179,38,30,.1);}
+.atk-icon.lk{background:rgba(125,82,96,.1);}
+.atk-icon.cm{background:rgba(103,80,164,.1);}
+.atk-info{flex:1;}
+.atk-name{font-size:.875rem;font-weight:500;}
+.atk-sub{font-size:.72rem;color:var(--md-on-surf-var);margin-top:2px;}
+.atk-pct{font-size:1.15rem;font-weight:700;text-align:right;}
+.atk-ci{font-size:.68rem;color:var(--md-on-surf-var);}
+
+/* ── TABLE ── */
+.report-card{background:var(--md-surf-cont);border-radius:20px;overflow:hidden;margin-bottom:28px;}
+.rpt-head{padding:18px 24px;border-bottom:1px solid rgba(121,116,126,.1);display:flex;align-items:center;justify-content:space-between;}
+.rpt-table{width:100%;border-collapse:collapse;}
+.rpt-table th{padding:11px 18px;font-size:.72rem;font-weight:500;text-transform:uppercase;letter-spacing:.06em;color:var(--md-on-surf-var);background:rgba(121,116,126,.05);text-align:left;}
+.rpt-table td{padding:13px 18px;font-size:.84rem;border-bottom:1px solid rgba(121,116,126,.07);transition:background 200ms;}
+.rpt-table tr:last-child td{border-bottom:none;}
+.rpt-table tr:hover td{background:rgba(103,80,164,.03);}
+.c-good{color:var(--md-success);font-weight:500;}
+.c-bad{color:var(--md-error);font-weight:500;}
+.c-warn{color:var(--md-warning);font-weight:500;}
+.c-model{font-weight:500;}
+.pass-chip{padding:3px 11px;border-radius:9999px;font-size:.72rem;font-weight:500;}
+.pass-chip.best{background:var(--md-primary);color:#fff;}
+.pass-chip.yes{background:rgba(56,106,32,.12);color:var(--md-success);}
+.pass-chip.no{background:rgba(179,38,30,.1);color:var(--md-error);}
+.pass-chip.skip{background:rgba(121,116,126,.1);color:var(--md-on-surf-var);}
+.btn-icon{width:34px;height:34px;border-radius:9999px;border:none;cursor:pointer;background:rgba(103,80,164,.1);color:var(--md-primary);font-size:14px;display:inline-flex;align-items:center;justify-content:center;transition:all 200ms var(--ease);margin-left:6px;}
+.btn-icon:hover{background:rgba(103,80,164,.18);}
+.btn-icon:active{transform:scale(.95);}
+
+/* ── VERDICT ── */
+.verdict{position:relative;overflow:hidden;background:var(--md-primary);border-radius:36px;padding:40px 44px;display:flex;gap:36px;align-items:center;}
+.v-orb-1{position:absolute;width:260px;height:260px;border-radius:50%;background:rgba(255,255,255,.08);top:-70px;right:-30px;pointer-events:none;}
+.v-orb-2{position:absolute;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.06);bottom:-30px;left:22%;pointer-events:none;}
+.verdict-left{flex:1;position:relative;z-index:1;}
+.v-badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:9999px;padding:5px 14px;margin-bottom:14px;font-size:.72rem;font-weight:500;color:rgba(255,255,255,.9);letter-spacing:.05em;text-transform:uppercase;}
+.v-title{font-size:1.85rem;font-weight:700;color:#fff;letter-spacing:-.03em;line-height:1.2;margin-bottom:10px;}
+.v-desc{font-size:.95rem;color:rgba(255,255,255,.75);line-height:1.6;max-width:440px;}
+.v-actions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;}
+.btn-v-primary{padding:11px 26px;border-radius:9999px;border:none;cursor:pointer;background:#fff;color:var(--md-primary);font-weight:700;font-size:.875rem;transition:all 300ms var(--ease);}
+.btn-v-primary:hover{box-shadow:0 6px 18px rgba(0,0,0,.2);transform:translateY(-1px);}
+.btn-v-primary:active{transform:scale(.95);}
+.btn-v-ghost{padding:11px 26px;border-radius:9999px;cursor:pointer;background:transparent;border:1.5px solid rgba(255,255,255,.4);color:rgba(255,255,255,.9);font-weight:500;font-size:.875rem;transition:all 300ms var(--ease);}
+.btn-v-ghost:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.7);}
+.btn-v-ghost:active{transform:scale(.95);}
+.verdict-right{position:relative;z-index:1;display:flex;flex-direction:column;gap:10px;min-width:260px;}
+.v-metric{background:rgba(255,255,255,.12);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);border-radius:16px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;transition:all 300ms var(--ease);}
+.v-metric:hover{background:rgba(255,255,255,.18);transform:translateX(4px);}
+.v-met-name{font-size:.84rem;color:rgba(255,255,255,.8);}
+.v-met-val{font-size:1.05rem;font-weight:700;color:#fff;}
+
+/* ── NO RESULTS PLACEHOLDER ── */
+.placeholder{text-align:center;padding:48px 24px;color:var(--md-on-surf-var);}
+.placeholder-icon{font-size:48px;margin-bottom:14px;opacity:.4;}
+.placeholder-text{font-size:1rem;margin-bottom:6px;}
+.placeholder-sub{font-size:.85rem;}
+
+/* RESPONSIVE */
+@media(max-width:1024px){.config-grid{grid-template-columns:1fr 1fr;}.models-grid{grid-template-columns:1fr 1fr;}.bottom-grid{grid-template-columns:1fr;}.upload-inner{flex-direction:column;}.upload-stats{flex-direction:row;}.verdict{flex-direction:column;}}
+@media(max-width:640px){.config-grid,.models-grid{grid-template-columns:1fr;}.topbar{padding:0 16px;}.page{padding:18px 14px 48px;}.verdict{padding:28px 22px;border-radius:24px;}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important;}}
+</style>
+</head>
+<body>
+
+<!-- ═══ TOPBAR ═══ -->
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">M</div>
+    <div>
+      <div class="brand-name">MIDST</div>
+      <div class="brand-sub">Synthetic Data Audit Framework</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Ready</span>
+    </div>
+    <button class="btn-run" id="btnRun" onclick="startAudit()">
+      ▶ &nbsp;Run Audit
+    </button>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ═══ STEP 1: UPLOAD ═══ -->
+  <div class="sec-head" style="margin-bottom:14px;">
+    <div>
+      <div class="sec-title">
+        Step 1 — Upload your dataset
+        <span class="tip"><span class="tip-icon">?</span>
+          <span class="tip-box">Your dataset is the real table of sensitive data (e.g. patient records, census data). The tool will learn its patterns and create a fake version that protects privacy. Nothing leaves your machine — the file is processed locally.</span>
+        </span>
+      </div>
+      <div class="sec-sub">Drop any CSV file here. The tool will read its columns and rows, then use it to train and test each AI model.</div>
+    </div>
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <div class="blur-orb orb-a" aria-hidden="true"></div>
+    <div class="blur-orb orb-b" aria-hidden="true"></div>
+    <div class="upload-inner">
+      <label class="upload-drop" for="csvInput" ondragover="ev.preventDefault();document.getElementById('uploadZone').classList.add('drag-over')" ondragleave="document.getElementById('uploadZone').classList.remove('drag-over')" ondrop="handleDrop(event)">
+        <input type="file" id="csvInput" accept=".csv" onchange="handleFileSelect(this.files[0])"/>
+        <div class="upload-icon">📂</div>
+        <div class="upload-cta">Click to choose a CSV file</div>
+        <div class="upload-hint">or drag and drop it here · max 50 MB</div>
+        <div class="file-info" id="fileInfo">
+          <div class="file-name" id="fileName"></div>
+          <div class="file-meta" id="fileMeta"></div>
+        </div>
+      </label>
+      <div class="upload-stats">
+        <div class="ustat"><div class="ustat-num" id="statRows">—</div><div class="ustat-label">Rows in dataset</div></div>
+        <div class="ustat"><div class="ustat-num" id="statCols">—</div><div class="ustat-label">Columns</div></div>
+        <div class="ustat"><div class="ustat-num" id="statSplit">—</div><div class="ustat-label">Training rows</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STEP 2: CONFIG ═══ -->
+  <div class="sec-head">
+    <div>
+      <div class="sec-title">Step 2 — Configure the audit</div>
+      <div class="sec-sub">Choose which AI models to test and set the privacy &amp; quality limits they must pass to be considered safe.</div>
+    </div>
+    <span class="badge" id="cfgModelCount">0 models selected</span>
+  </div>
+
+  <div class="config-grid">
+
+    <!-- Dataset settings -->
+    <div class="cfg-card">
+      <div class="cfg-title">Dataset settings</div>
+      <div class="md-field">
+        <input class="md-input" id="targetCol" placeholder=" " oninput="updateConfig()"/>
+        <label class="md-label">Target column (optional)
+          <span class="tip"><span class="tip-icon">?</span>
+            <span class="tip-box">This is the column you care most about predicting — for example "income" or "diagnosis". When set, the tool runs an extra test: it trains a classifier on fake data and checks if it still works on real data. Leave blank to skip this test.</span>
+          </span>
+        </label>
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-key">Max rows used
+          <span class="tip"><span class="tip-icon">?</span>
+            <span class="tip-box">If your dataset is very large, training can take hours. Setting a cap (e.g. 2000 rows) speeds things up while still giving meaningful results. The tool picks a random sample of this size.</span>
+          </span>
+        </span>
+        <span class="cfg-val" id="cfgMaxRows">2,000</span>
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-key">Train / test split
+          <span class="tip"><span class="tip-icon">?</span>
+            <span class="tip-box">The data is divided in two halves. The first half trains the AI models. The second half ("control") is used by the privacy tests as a fair comparison group — it represents people who were NOT in the training data.</span>
+          </span>
+        </span>
+        <span class="cfg-val">50% / 50%</span>
+      </div>
+      <div class="cfg-row">
+        <span class="cfg-key">Attack queries per model
+          <span class="tip"><span class="tip-icon">?</span>
+            <span class="tip-box">Each privacy test sends this many probe queries to try to find real people in the fake data. More queries = more thorough test, but slower. 500 is a good balance for research; use 50–100 for quick demos.</span>
+          </span>
+        </span>
+        <span class="cfg-val" id="cfgNAttacks">500</span>
+      </div>
+    </div>
+
+    <!-- Privacy thresholds -->
+    <div class="cfg-card">
+      <div class="cfg-title">Privacy limits
+        <span class="tip"><span class="tip-icon">?</span>
+          <span class="tip-box">These are the maximum privacy risk scores a model is allowed to have. If a model's risk is above any of these limits, it is marked "Failed" — meaning it is not safe to release. Lower = stricter. 10% is a reasonable research default.</span>
+        </span>
+      </div>
+      <div id="sliderContainer"></div>
+    </div>
+
+    <!-- Model toggles -->
+    <div class="cfg-card">
+      <div class="cfg-title">AI models to test</div>
+      <div id="modelToggles"></div>
+    </div>
+
+  </div>
+
+  <!-- ═══ PROGRESS ═══ -->
+  <div class="progress-banner" id="progressBanner">
+    <div class="spinner"></div>
+    <div class="progress-text">
+      <div class="progress-step" id="progressStep">Starting…</div>
+      <div class="progress-sub">Processing your dataset — this may take a few minutes</div>
+    </div>
+    <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  </div>
+
+  <!-- ═══ LIVE LOGS ═══ -->
+  <div class="log-card">
+    <div class="log-header">
+      <div>
+        <div class="sec-title" style="font-size:1rem;">Live run log
+          <span class="tip"><span class="tip-icon">?</span>
+            <span class="tip-box">This scrolling panel shows exactly what the framework is doing in real time — loading data, training models, running privacy tests, and scoring results. It's the raw output from the Python backend.</span>
+          </span>
+        </div>
+      </div>
+      <button class="btn-ghost" onclick="clearLogs()">Clear</button>
+    </div>
+    <div class="log-body" id="logBody">
+      <div class="log-empty">Logs will appear here once you start a run…</div>
+    </div>
+  </div>
+
+  <!-- ═══ RESULTS ═══ -->
+  <div class="results-section" id="resultsSection">
+
+    <!-- Model cards -->
+    <div class="sec-head">
+      <div>
+        <div class="sec-title">Results — per model</div>
+        <div class="sec-sub">Each card shows one AI model's privacy risk and data quality scores. Green = safe, red = failed.</div>
+      </div>
+      <span class="badge" id="resultsBadge">—</span>
+    </div>
+    <div class="models-grid" id="modelsGrid"></div>
+
+    <!-- Charts + attacks -->
+    <div class="bottom-grid">
+      <div class="chart-card">
+        <div class="sec-head" style="margin-bottom:0">
+          <div>
+            <div class="sec-title" style="font-size:1rem;">Privacy vs Quality map
+              <span class="tip"><span class="tip-icon">?</span>
+                <span class="tip-box">Each dot is one AI model. The horizontal axis shows privacy risk (further right = more dangerous). The vertical axis shows data quality (higher = more useful). The ideal model lives in the top-left green zone: low risk, high quality.</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-area">
+          <svg class="chart-svg" viewBox="0 0 400 220" id="pvuChart">
+            <line x1="48" y1="10" x2="48" y2="185" stroke="#E7E0EC" stroke-width="1"/>
+            <line x1="48" y1="185" x2="390" y2="185" stroke="#E7E0EC" stroke-width="1"/>
+            <line x1="48" y1="60"  x2="390" y2="60"  stroke="#E7E0EC" stroke-width=".5" stroke-dasharray="4 3"/>
+            <line x1="48" y1="110" x2="390" y2="110" stroke="#E7E0EC" stroke-width=".5" stroke-dasharray="4 3"/>
+            <line x1="48" y1="160" x2="390" y2="160" stroke="#E7E0EC" stroke-width=".5" stroke-dasharray="4 3"/>
+            <line x1="140" y1="10" x2="140" y2="185" stroke="#E7E0EC" stroke-width=".5" stroke-dasharray="4 3"/>
+            <line x1="240" y1="10" x2="240" y2="185" stroke="#E7E0EC" stroke-width=".5" stroke-dasharray="4 3"/>
+            <line x1="340" y1="10" x2="340" y2="185" stroke="#E7E0EC" stroke-width=".5" stroke-dasharray="4 3"/>
+            <text x="48"  y="200" font-size="9" fill="#79747E" text-anchor="middle">0%</text>
+            <text x="140" y="200" font-size="9" fill="#79747E" text-anchor="middle">10%</text>
+            <text x="240" y="200" font-size="9" fill="#79747E" text-anchor="middle">20%</text>
+            <text x="340" y="200" font-size="9" fill="#79747E" text-anchor="middle">30%</text>
+            <text x="390" y="200" font-size="9" fill="#79747E" text-anchor="middle">Risk →</text>
+            <text x="40"  y="185" font-size="9" fill="#79747E" text-anchor="end">0</text>
+            <text x="40"  y="110" font-size="9" fill="#79747E" text-anchor="end">50</text>
+            <text x="40"  y="35"  font-size="9" fill="#79747E" text-anchor="end">100</text>
+            <rect x="48" y="10" width="92" height="175" fill="rgba(56,106,32,.06)" rx="4"/>
+            <text x="94" y="22" font-size="8" fill="#386A20" text-anchor="middle">Safe zone</text>
+            <g id="chartDots"></g>
+          </svg>
+        </div>
+        <div class="chart-legend">
+          <div class="leg-item"><div class="leg-dot" style="background:#6750A4"></div>Recommended</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#7D5260"></div>Passed</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#B3261E"></div>Failed</div>
+        </div>
+      </div>
+
+      <div class="attack-card">
+        <div class="sec-head" style="margin-bottom:10px">
+          <div>
+            <div class="sec-title" style="font-size:1rem;">Privacy attack breakdown
+              <span class="tip"><span class="tip-icon">?</span>
+                <span class="tip-box">Three different methods were used to try to find real people inside the fake data. Each shows the percentage of probes that succeeded. Lower is better — below 10% means the model passed that test.</span>
+              </span>
+            </div>
+            <div class="sec-sub" style="font-size:.75rem;">Best model · best scores shown</div>
+          </div>
+        </div>
+        <div id="attackRows"></div>
+        <div id="tstrPanel" style="margin-top:18px;padding-top:16px;border-top:1px solid rgba(121,116,126,.12);display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Report table -->
+    <div class="report-card">
+      <div class="rpt-head">
+        <div>
+          <div class="sec-title" style="font-size:1rem;">Full comparison table</div>
+          <div class="sec-sub" style="font-size:.75rem;">All models ranked by composite safety score</div>
+        </div>
+        <div>
+          <button class="btn-icon" title="Download CSV report" onclick="downloadFile('final_audit_report.csv')">↓</button>
+          <button class="btn-icon" title="Download JSON summary" onclick="downloadFile('audit_summary.json')">{}</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;"><table class="rpt-table" id="reportTable"></table></div>
+    </div>
+
+    <!-- Verdict -->
+    <div class="verdict" id="verdictPanel">
+      <div class="v-orb-1" aria-hidden="true"></div>
+      <div class="v-orb-2" aria-hidden="true"></div>
+      <div class="verdict-left">
+        <div class="v-badge" id="vBadge">✦ Audit verdict</div>
+        <h2 class="v-title" id="vTitle">—</h2>
+        <p class="v-desc" id="vDesc">—</p>
+        <div class="v-actions">
+          <button class="btn-v-primary" id="vDownloadBtn" onclick="">Export synthetic dataset</button>
+          <button class="btn-v-ghost" onclick="downloadFile('final_audit_report.csv')">Download full report</button>
+        </div>
+      </div>
+      <div class="verdict-right" id="vMetrics"></div>
+    </div>
+
+  </div>
+
+  <!-- Placeholder when no results yet -->
+  <div class="placeholder" id="placeholder">
+    <div class="placeholder-icon">🔬</div>
+    <div class="placeholder-text">No audit results yet</div>
+    <div class="placeholder-sub">Upload a CSV and press <strong>Run Audit</strong> to start.</div>
+  </div>
+
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════
+const state = {
+  filename: null,
+  rowCount: 0,
+  columns: [],
+  running: false,
+  results: null,
+  modelStatuses: {},   // from /api/models
+  sliders: {
+    "Singling-out risk limit": { key: "singling_out", val: 10 },
+    "Linkability risk limit":  { key: "linkability",  val: 10 },
+    "CMLA leakage limit":      { key: "cmla",         val: 10 },
+    "TSTR gap limit":          { key: "tstr_gap_max", val: 10 },
+  },
+  models: {
+    copula:    { label: "Gaussian Copula",  sub: "Statistical model — fastest, no deep learning",       cfg: {},                                on: true  },
+    ctgan:     { label: "CTGAN",            sub: "GAN-based deep learning · 300 training rounds",       cfg: {epochs:300, batch_size:500},     on: true  },
+    tvae:      { label: "TVAE",             sub: "VAE-based deep learning · 300 training rounds",       cfg: {epochs:300, batch_size:500},     on: true  },
+    privbayes: { label: "PrivBayes",        sub: "Privacy-guaranteed Bayesian model · ε = 1.0",         cfg: {epsilon:1.0},                    on: false },
+    pategan:   { label: "PATE-GAN",         sub: "Privacy-guaranteed GAN · teacher-student method",     cfg: {epsilon:1.0},                    on: false },
+  },
+};
+
+let logSource = null;
+let progressTimer = null;
+let progressPct = 0;
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", () => {
+  renderSliders();
+  renderModelToggles();
+  fetchModelStatuses();
+  updateModelCount();
+});
+
+async function fetchModelStatuses() {
+  try {
+    const r = await fetch("/api/models");
+    state.modelStatuses = await r.json();
+    renderModelToggles();
+  } catch(e) { /* offline/demo — ignore */ }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SLIDERS
+// ═══════════════════════════════════════════════════════════
+function renderSliders() {
+  const container = document.getElementById("sliderContainer");
+  container.innerHTML = "";
+  Object.entries(state.sliders).forEach(([label, s]) => {
+    const div = document.createElement("div");
+    div.className = "slider-section";
+    div.innerHTML = `
+      <div class="slider-head">
+        <span class="slider-name">${label}</span>
+        <span class="slider-val" id="sv_${s.key}">${s.val}%</span>
+      </div>
+      <div class="slider-track" id="st_${s.key}" data-key="${s.key}">
+        <div class="slider-fill" id="sf_${s.key}" style="width:${s.val}%"></div>
+        <div class="slider-thumb" id="sth_${s.key}" style="left:${s.val}%"></div>
+      </div>`;
+    container.appendChild(div);
+    const track = div.querySelector(".slider-track");
+    track.addEventListener("click", e => {
+      const rect = track.getBoundingClientRect();
+      const pct = Math.max(1, Math.min(50, Math.round(((e.clientX - rect.left) / rect.width) * 100)));
+      state.sliders[label].val = pct;
+      document.getElementById(`sf_${s.key}`).style.width = pct + "%";
+      document.getElementById(`sth_${s.key}`).style.left = pct + "%";
+      document.getElementById(`sv_${s.key}`).textContent = pct + "%";
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODEL TOGGLES
+// ═══════════════════════════════════════════════════════════
+function renderModelToggles() {
+  const container = document.getElementById("modelToggles");
+  container.innerHTML = "";
+  Object.entries(state.models).forEach(([key, m]) => {
+    const isDP = (key === "privbayes" || key === "pategan");
+    const installed = state.modelStatuses[key] !== "not_installed";
+    const notAvailable = isDP && !installed;
+
+    const row = document.createElement("div");
+    row.className = "toggle-row";
+    row.innerHTML = `
+      <div>
+        <div class="toggle-label-text">${m.label}
+          ${isDP ? `<span class="tip"><span class="tip-icon">?</span>
+            <span class="tip-box">This model uses Differential Privacy — a mathematical guarantee that no individual's data can be exposed. Install with: <code>pip install smartnoise-synth</code>. The ε (epsilon) value controls the privacy-quality tradeoff: lower ε = stronger privacy but lower data quality.</span>
+          </span>` : ""}
+        </div>
+        <div class="toggle-sub-text">${notAvailable ? "⚠ Not installed — run: pip install smartnoise-synth" : m.sub}</div>
+      </div>
+      <div class="toggle-switch ${m.on ? "on" : ""} ${notAvailable ? "disabled" : ""}" id="tog_${key}"
+           ${notAvailable ? "" : `onclick="toggleModel('${key}')"`}></div>`;
+    container.appendChild(row);
+  });
+  updateModelCount();
+}
+
+function toggleModel(key) {
+  state.models[key].on = !state.models[key].on;
+  const el = document.getElementById(`tog_${key}`);
+  el.classList.toggle("on", state.models[key].on);
+  updateModelCount();
+}
+
+function updateModelCount() {
+  const n = Object.values(state.models).filter(m => m.on).length;
+  document.getElementById("cfgModelCount").textContent = `${n} model${n !== 1 ? "s" : ""} selected`;
+}
+
+function updateConfig() {}  // hook for future live-preview
+
+// ═══════════════════════════════════════════════════════════
+//  FILE UPLOAD
+// ═══════════════════════════════════════════════════════════
+function handleDrop(ev) {
+  ev.preventDefault();
+  document.getElementById("uploadZone").classList.remove("drag-over");
+  const file = ev.dataTransfer.files[0];
+  if (file) handleFileSelect(file);
+}
+
+async function handleFileSelect(file) {
+  if (!file || !file.name.endsWith(".csv")) {
+    alert("Please upload a .csv file.");
+    return;
+  }
+  const form = new FormData();
+  form.append("file", file);
+  setStatus("Uploading…", "");
+  try {
+    const r = await fetch("/api/upload", { method: "POST", body: form });
+    const data = await r.json();
+    if (data.error) { alert(data.error); return; }
+
+    state.filename = data.filename;
+    state.rowCount = data.rows;
+    state.columns  = data.columns;
+
+    document.getElementById("statRows").textContent  = data.rows.toLocaleString();
+    document.getElementById("statCols").textContent  = data.columns.length;
+    document.getElementById("statSplit").textContent = Math.floor(data.rows / 2).toLocaleString();
+    document.getElementById("cfgMaxRows").textContent = Math.min(2000, data.rows).toLocaleString();
+
+    const fi = document.getElementById("fileInfo");
+    fi.classList.add("show");
+    document.getElementById("fileName").textContent = `✓ ${data.filename}`;
+    document.getElementById("fileMeta").textContent = `${data.rows} rows · ${data.columns.length} columns`;
+
+    setStatus("Ready to run", "done");
+    addLog("info", `Uploaded: ${data.filename} — ${data.rows} rows, ${data.columns.length} columns`);
+  } catch(e) {
+    setStatus("Upload failed", "error");
+    addLog("error", `Upload error: ${e}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RUN AUDIT
+// ═══════════════════════════════════════════════════════════
+async function startAudit() {
+  if (!state.filename) { alert("Please upload a CSV file first."); return; }
+  if (state.running)   { alert("An audit is already running."); return; }
+
+  const selectedModels = {};
+  Object.entries(state.models).forEach(([key, m]) => {
+    if (m.on) selectedModels[key] = m.cfg;
+  });
+  if (Object.keys(selectedModels).length === 0) {
+    alert("Please enable at least one model."); return;
+  }
+
+  const ptVals = {};
+  const utVals = {};
+  Object.values(state.sliders).forEach(s => {
+    if (["singling_out","linkability","cmla"].includes(s.key)) ptVals[s.key] = s.val / 100;
+    if (s.key === "tstr_gap_max") utVals.tstr_gap_max = s.val / 100;
+  });
+  utVals.logic_consistency      = 0.70;
+  utVals.correlation_similarity = 0.70;
+
+  const targetCol = document.getElementById("targetCol").value.trim() || null;
+
+  const body = {
+    filename: state.filename,
+    max_rows: Math.min(2000, state.rowCount),
+    train_ratio: 0.5,
+    random_seed: 42,
+    n_attacks: 500,
+    target_col: targetCol,
+    models: selectedModels,
+    privacy_thresholds: ptVals,
+    utility_thresholds: utVals,
+    score_weights: { privacy: 0.5, utility: 0.5 },
+  };
+
+  state.running = true;
+  document.getElementById("btnRun").disabled = true;
+  document.getElementById("btnRun").textContent = "⏳ Running…";
+  setStatus("Running…", "running");
+  document.getElementById("progressBanner").classList.add("show");
+  document.getElementById("resultsSection").classList.remove("show");
+  document.getElementById("placeholder").style.display = "block";
+
+  clearLogs();
+  startProgressSim(Object.keys(selectedModels).length);
+  openLogStream();
+
+  try {
+    const r = await fetch("/api/run", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(body)
+    });
+    const d = await r.json();
+    if (d.error) {
+      addLog("error", d.error);
+      stopRun("error");
+    }
+  } catch(e) {
+    addLog("error", `Failed to start run: ${e}`);
+    stopRun("error");
+  }
+}
+
+function stopRun(status) {
+  state.running = false;
+  document.getElementById("btnRun").disabled = false;
+  document.getElementById("btnRun").innerHTML = "▶ &nbsp;Run Audit";
+  document.getElementById("progressBanner").classList.remove("show");
+  clearInterval(progressTimer);
+  setStatus(status === "done" ? "Audit complete" : status === "error" ? "Error" : "Ready", status);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SSE LOG STREAM
+// ═══════════════════════════════════════════════════════════
+function openLogStream() {
+  if (logSource) { logSource.close(); logSource = null; }
+  logSource = new EventSource("/api/logs");
+  logSource.onmessage = e => {
+    const item = JSON.parse(e.data);
+    addLog(item.level, item.message, item.ts);
+    updateProgress(item.message);
+    if (item.level === "done") {
+      try { renderResults(JSON.parse(item.message)); } catch(_) {}
+      stopRun("done");
+      logSource.close();
+    }
+  };
+  logSource.onerror = () => { /* connection will auto-reconnect */ };
+}
+
+function addLog(level, msg, ts) {
+  const body = document.getElementById("logBody");
+  const empty = body.querySelector(".log-empty");
+  if (empty) empty.remove();
+  const div = document.createElement("div");
+  div.className = `log-line ${level}`;
+  div.innerHTML = `<span class="ts">${ts || new Date().toLocaleTimeString()}</span><span class="msg">${escHtml(msg)}</span>`;
+  body.appendChild(div);
+  body.scrollTop = body.scrollHeight;
+}
+
+function clearLogs() {
+  document.getElementById("logBody").innerHTML = '<div class="log-empty">Logs will appear here once you start a run…</div>';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ═══════════════════════════════════════════════════════════
+//  PROGRESS SIMULATION
+// ═══════════════════════════════════════════════════════════
+function startProgressSim(nModels) {
+  progressPct = 0;
+  const fill = document.getElementById("progFill");
+  const step = document.getElementById("progressStep");
+  const phases = [
+    "Loading and cleaning data…",
+    "Shuffling and splitting dataset…",
+    ...Array.from({length:nModels}, (_,i) => `Training model ${i+1}/${nModels}…`),
+    "Running privacy attacks…",
+    "Computing utility scores…",
+    "Ranking models and writing report…",
+  ];
+  let pi = 0;
+  progressTimer = setInterval(() => {
+    progressPct = Math.min(progressPct + Math.random() * 4 + 1, 97);
+    fill.style.width = progressPct + "%";
+    const ni = Math.floor((progressPct / 100) * phases.length);
+    if (ni < phases.length) step.textContent = phases[ni];
+  }, 800);
+}
+
+function updateProgress(msg) {
+  if (msg.includes("Training") || msg.includes("attack") || msg.includes("utility"))
+    document.getElementById("progressStep").textContent = msg.slice(0, 70);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER RESULTS
+// ═══════════════════════════════════════════════════════════
+function renderResults(summary) {
+  const results   = summary.results || [];
+  const bestModel = summary.recommended_model;
+  const passed    = summary.threshold_passed;
+
+  document.getElementById("resultsSection").classList.add("show");
+  document.getElementById("placeholder").style.display = "none";
+  document.getElementById("resultsBadge").textContent  = `${results.length} model${results.length!==1?"s":""}`;
+
+  renderModelCards(results, bestModel);
+  renderChart(results, bestModel);
+  renderAttackBreakdown(results, bestModel);
+  renderTable(results, bestModel);
+  renderVerdict(summary);
+}
+
+// ── Model cards ────────────────────────────────────────────
+function renderModelCards(results, bestModel) {
+  const grid = document.getElementById("modelsGrid");
+  grid.innerHTML = "";
+  results.forEach(r => {
+    const isBest  = r.model === bestModel;
+    const pass    = r.overall_pass;
+    const skipped = r.composite_score === 0 && r.singling_out_risk === 1;
+    const badgeClass = isBest ? "best" : pass ? "pass" : skipped ? "skipped" : "fail";
+    const badgeText  = isBest ? "✦ Best" : pass ? "Passed" : skipped ? "Skipped" : "Failed";
+
+    const rows = [
+      { label: "Singling-out risk", val: r.singling_out_risk, type: "risk",  threshold: 0.1 },
+      { label: "Linkability risk",  val: r.linkability_risk,  type: "risk",  threshold: 0.1 },
+      { label: "CMLA leakage",      val: r.cmla_risk,         type: "cmla",  threshold: 0.1 },
+      { label: "Data quality",      val: r.logic_consistency, type: "util",  threshold: 0.7 },
+      { label: "Pattern match",     val: r.correlation_similarity, type: "util", threshold: 0.7 },
+    ];
+
+    const metricsHtml = rows.map(row => {
+      const pct   = Math.round(row.val * 100);
+      const isGood = row.type === "risk" ? row.val <= row.threshold : row.val >= row.threshold;
+      const cls   = skipped ? "" : isGood ? "good" : row.type === "risk" ? "bad" : "warn";
+      const barW  = row.type === "risk" ? Math.min(pct * 3, 100) : pct;
+      return `<div class="met-row">
+        <span class="met-label">${row.label}</span>
+        <div class="met-bar-wrap"><div class="met-bar ${row.type}" data-w="${barW}" style="width:0%"></div></div>
+        <span class="met-num ${cls}">${pct}%</span>
+      </div>`;
+    }).join("");
+
+    const card = document.createElement("div");
+    card.className = `model-card${isBest ? " winner" : ""}`;
+    card.innerHTML = `
+      <div class="mc-head">
+        <div>
+          <div class="mc-name">${r.model}</div>
+          <div class="mc-type">${state.models[r.model]?.sub || ""}</div>
+        </div>
+        <span class="mc-badge ${badgeClass}">${badgeText}</span>
+      </div>
+      <div class="mc-div"></div>
+      <div class="mc-metrics">${metricsHtml}</div>
+      <div class="mc-foot">
+        <span class="mc-score-label">Composite safety score</span>
+        <span class="mc-score-val"${isBest ? ' style="color:var(--md-primary)"':''}>
+          ${r.composite_score.toFixed(3)}
+        </span>
+      </div>`;
+    grid.appendChild(card);
+
+    // Animate bars
+    setTimeout(() => {
+      card.querySelectorAll(".met-bar").forEach((bar, i) => {
+        setTimeout(() => { bar.style.width = bar.getAttribute("data-w") + "%"; }, i * 80);
+      });
+    }, 100);
+  });
+}
+
+// ── Scatter chart ──────────────────────────────────────────
+function renderChart(results, bestModel) {
+  const dotsG = document.getElementById("chartDots");
+  dotsG.innerHTML = "";
+  const colors = { best: "#6750A4", pass: "#7D5260", fail: "#B3261E", skipped: "#79747E" };
+
+  results.forEach(r => {
+    const isBest = r.model === bestModel;
+    const pass   = r.overall_pass;
+    const skip   = r.composite_score === 0 && r.singling_out_risk === 1;
+    const colorKey = isBest ? "best" : pass ? "pass" : skip ? "skipped" : "fail";
+
+    // X = risk (0–30%), Y = utility (0–100%)
+    const riskMax  = Math.max(r.singling_out_risk, r.linkability_risk, r.cmla_risk);
+    const utilAvg  = (r.logic_consistency + r.correlation_similarity) / 2;
+    const cx = 48 + (riskMax / 0.30) * (340 - 48);
+    const cy = 185 - (utilAvg * 175);
+    const rad = isBest ? 13 : 10;
+
+    dotsG.innerHTML += `
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rad}"
+              fill="${colors[colorKey]}" opacity="${isBest ? .9 : .7}"/>
+      <text x="${(cx + rad + 4).toFixed(1)}" y="${(cy + 4).toFixed(1)}"
+            font-size="${isBest ? 11 : 10}" fill="${colors[colorKey]}"
+            font-weight="${isBest ? 700 : 400}">${r.model}${isBest ? " ✦" : ""}</text>`;
+  });
+}
+
+// ── Attack breakdown ───────────────────────────────────────
+function renderAttackBreakdown(results, bestModel) {
+  const best = results.find(r => r.model === bestModel) || results[0];
+  if (!best) return;
+
+  const attacks = [
+    { key:"singling_out_risk", ciKey:"singling_out_ci", icon:"🎯", cls:"so",
+      label:"Singling-out", sub:"Can an attacker craft a query that uniquely identifies a real person?" },
+    { key:"linkability_risk",  ciKey:"linkability_ci",  icon:"🔗", cls:"lk",
+      label:"Linkability",  sub:"Can an attacker use partial info to re-link records to real people?" },
+    { key:"cmla_risk",         ciKey:null,              icon:"🧩", cls:"cm",
+      label:"CMLA (structural)", sub:"Do the fake data's clusters closely mirror the real data's structure?" },
+  ];
+
+  const container = document.getElementById("attackRows");
+  container.innerHTML = attacks.map(a => {
+    const pct   = Math.round(best[a.key] * 100);
+    const ci    = a.ciKey ? best[a.ciKey] : "±2%";
+    const cls   = pct <= 10 ? "good" : pct <= 20 ? "warn" : "bad";
+    const color = pct <= 10 ? "var(--md-success)" : pct <= 20 ? "var(--md-warning)" : "var(--md-error)";
+    return `<div class="atk-item">
+      <div class="atk-icon ${a.cls}">${a.icon}</div>
+      <div class="atk-info">
+        <div class="atk-name">${a.label}</div>
+        <div class="atk-sub">${a.sub}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="atk-pct" style="color:${color}">${pct}%</div>
+        <div class="atk-ci">${ci}</div>
+      </div>
+    </div>`;
+  }).join("");
+
+  // TSTR panel
+  const tstr = document.getElementById("tstrPanel");
+  if (best.tstr_score >= 0) {
+    tstr.style.display = "block";
+    tstr.innerHTML = `
+      <div style="font-size:.84rem;font-weight:500;color:var(--md-on-bg);margin-bottom:10px;">
+        Machine learning utility test
+        <span class="tip"><span class="tip-icon">?</span>
+          <span class="tip-box">TSTR = Train on Synthetic, Test on Real. An AI classifier is trained on fake data and then tested on real data. If the accuracy is close to training on real data directly, the synthetic data is genuinely useful. The "gap" is the accuracy drop — smaller is better.</span>
+        </span>
+      </div>
+      <div class="cfg-row"><span class="cfg-key" style="font-size:.82rem">Real-data baseline accuracy</span><span class="cfg-val">${(best.tstr_baseline*100).toFixed(1)}%</span></div>
+      <div class="cfg-row"><span class="cfg-key" style="font-size:.82rem">Fake-data trained accuracy</span><span class="cfg-val">${(best.tstr_score*100).toFixed(1)}%</span></div>
+      <div class="cfg-row"><span class="cfg-key" style="font-size:.82rem">Accuracy gap (lower = better)</span>
+        <span class="cfg-val" style="${best.tstr_gap<=0.1 ? '' : 'color:var(--md-warning)'}">${(best.tstr_gap*100).toFixed(1)}%</span>
+      </div>`;
+  } else {
+    tstr.style.display = "none";
+  }
+}
+
+// ── Report table ───────────────────────────────────────────
+function renderTable(results, bestModel) {
+  const tbl = document.getElementById("reportTable");
+  tbl.innerHTML = `<thead><tr>
+    <th>Model</th><th>S-O risk</th><th>S-O range</th><th>Link risk</th>
+    <th>CMLA</th><th>Pattern match</th><th>Data quality</th>
+    <th>TSTR gap</th><th>Score</th><th>Verdict</th>
+  </tr></thead><tbody>${results.map(r => {
+    const isBest = r.model === bestModel;
+    const skip   = r.composite_score === 0 && r.singling_out_risk === 1;
+    const chipCls = isBest ? "best" : r.overall_pass ? "yes" : skip ? "skip" : "no";
+    const chipTxt = isBest ? "✦ Recommended" : r.overall_pass ? "Passed" : skip ? "Skipped" : "Failed";
+    const c = (v,good,bad) => `class="${v?'c-good':'c-bad'}"`;
+    return `<tr>
+      <td class="c-model">${r.model}</td>
+      <td ${c(r.singling_out_risk<=.1)}>${(r.singling_out_risk*100).toFixed(1)}%</td>
+      <td style="font-size:.75rem;color:var(--md-on-surf-var)">${r.singling_out_ci||"—"}</td>
+      <td ${c(r.linkability_risk<=.1)}>${(r.linkability_risk*100).toFixed(1)}%</td>
+      <td ${c(r.cmla_risk<=.1)}>${(r.cmla_risk*100).toFixed(1)}%</td>
+      <td ${c(r.correlation_similarity>=.7)}>${(r.correlation_similarity*100).toFixed(1)}%</td>
+      <td ${c(r.logic_consistency>=.7)}>${(r.logic_consistency*100).toFixed(1)}%</td>
+      <td>${r.tstr_gap>=0 ? `<span ${c(r.tstr_gap<=.1)}>${(r.tstr_gap*100).toFixed(1)}%</span>` : "—"}</td>
+      <td style="font-weight:700;color:${isBest?'var(--md-primary)':''}">${r.composite_score.toFixed(3)}</td>
+      <td><span class="pass-chip ${chipCls}">${chipTxt}</span></td>
+    </tr>`;
+  }).join("")}</tbody>`;
+}
+
+// ── Verdict ────────────────────────────────────────────────
+function renderVerdict(summary) {
+  const passed  = summary.threshold_passed;
+  const best    = summary.recommended_model;
+  const res     = summary.results || [];
+  const bestRow = res.find(r => r.model === best) || res[0];
+
+  document.getElementById("vBadge").textContent = passed
+    ? "✦ Safe-to-Release Certification"
+    : "⚠ Advisory — Review Required";
+
+  document.getElementById("vTitle").textContent = passed
+    ? `${best} is cleared for release`
+    : `${best} is the best available — but not yet certified`;
+
+  document.getElementById("vDesc").textContent = passed
+    ? `All three privacy tests are below the threshold and data quality is sufficient. This synthetic dataset can be shared or published under the MIDST audit framework.`
+    : `No model passed every threshold in this run. The best-scoring model is shown here. Consider relaxing the thresholds, using more training data, or switching to a privacy-guaranteed model (PrivBayes / PATE-GAN).`;
+
+  document.getElementById("vDownloadBtn").onclick = () => downloadFile(`${best}_best_synthetic.csv`);
+
+  if (bestRow) {
+    const maxRisk = Math.max(bestRow.singling_out_risk, bestRow.linkability_risk, bestRow.cmla_risk);
+    document.getElementById("vMetrics").innerHTML = [
+      { name: "Highest privacy risk", val: (maxRisk * 100).toFixed(1) + "%" },
+      { name: "Data quality score",   val: (bestRow.logic_consistency * 100).toFixed(1) + "%" },
+      { name: "Pattern accuracy",     val: (bestRow.correlation_similarity * 100).toFixed(1) + "%" },
+      { name: "Composite score",      val: bestRow.composite_score.toFixed(3) + " / 1.00" },
+      ...(bestRow.tstr_score >= 0 ? [{ name: "ML utility (TSTR)", val: (bestRow.tstr_score * 100).toFixed(1) + "%" }] : []),
+    ].map(m => `<div class="v-metric"><span class="v-met-name">${m.name}</span><span class="v-met-val">${m.val}</span></div>`).join("");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DOWNLOAD
+// ═══════════════════════════════════════════════════════════
+function downloadFile(filename) {
+  window.open(`/api/download/${encodeURIComponent(filename)}`, "_blank");
+}
+
+// ═══════════════════════════════════════════════════════════
+//  STATUS DOT
+// ═══════════════════════════════════════════════════════════
+function setStatus(text, state) {
+  document.getElementById("statusText").textContent = text;
+  const dot = document.getElementById("statusDot");
+  dot.className = "status-dot" + (state ? " " + state : "");
+}
+</script>
+</body>
+</html>

@@ -222,7 +222,7 @@ class PrivBayesGenerator(BaseGenerator):
         try:
             from snsynth import Synthesizer
             epsilon = self.kwargs.get("epsilon", 1.0)
-            self._model = Synthesizer.create("mst", epsilon=epsilon, verbose=True)
+            self._model = Synthesizer.create("privbayes", epsilon=epsilon)
             self._epsilon = epsilon
         except ImportError:
             raise ImportError(

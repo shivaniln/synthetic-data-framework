@@ -1,0 +1,27 @@
+# MIDST Framework — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# Core data
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Synthetic data generation
+sdv>=1.9.0
+
+# Privacy attack evaluation
+anonymeter>=1.0.0
+
+# ML utility (TSTR)
+scikit-learn>=1.3.0
+
+# Visualisation
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# API server
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Optional — Differential Privacy models
+# Uncomment when you're ready to use PrivBayes / PATE-GAN:
+# smartnoise-synth>=0.3.0

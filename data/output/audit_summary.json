@@ -1,35 +1,14 @@
 {
   "recommended_model": "copula",
   "threshold_passed": true,
-  "run_config": {
-    "max_rows": 2000,
-    "train_ratio": 0.5,
-    "random_seed": 42,
-    "privacy_thresholds": {
-      "singling_out": 0.1,
-      "linkability": 0.1,
-      "cmla": 0.1
-    },
-    "utility_thresholds": {
-      "logic_consistency": 0.7,
-      "correlation_similarity": 0.7,
-      "tstr_gap_max": 0.1
-    },
-    "score_weights": {
-      "privacy": 0.5,
-      "utility": 0.5
-    },
-    "target_col": null,
-    "n_attacks": 500,
-    "output_dir": "data/output"
-  },
+  "total_runtime_seconds": 132.6,
   "results": [
     {
       "model": "copula",
-      "singling_out_risk": 0.0,
-      "singling_out_ci": "[0.000, 0.004]",
-      "linkability_risk": 0.002,
-      "linkability_ci": "[0.000, 0.011]",
+      "singling_out_risk": 0.006,
+      "singling_out_ci": "[0.000, 0.019]",
+      "linkability_risk": 0.0,
+      "linkability_ci": "[0.000, 0.005]",
       "cmla_risk": 0.0,
       "correlation_similarity": 0.9627,
       "logic_consistency": 1.0,
@@ -37,59 +16,83 @@
       "tstr_baseline": -1.0,
       "tstr_gap": -1.0,
       "composite_utility": 0.9813,
-      "privacy_score": 0.998,
-      "composite_score": 0.9897,
+      "privacy_score": 0.994,
+      "composite_score": 0.9877,
       "privacy_pass": true,
       "utility_pass": true,
       "overall_pass": true,
       "model_config": "{}",
       "violation_breakdown": "{}",
+      "cmla_notes": "k=10 | threshold=0.0000 (p5 real-real) | leaking=0/1000",
       "is_recommended": true
     },
     {
       "model": "tvae",
       "singling_out_risk": 0.0,
-      "singling_out_ci": "[0.000, 0.011]",
-      "linkability_risk": 0.002,
-      "linkability_ci": "[0.000, 0.009]",
+      "singling_out_ci": "[0.000, 0.010]",
+      "linkability_risk": 0.0,
+      "linkability_ci": "[0.000, 0.007]",
       "cmla_risk": 0.0,
-      "correlation_similarity": 0.9454,
+      "correlation_similarity": 0.9336,
       "logic_consistency": 1.0,
       "tstr_score": -1.0,
       "tstr_baseline": -1.0,
       "tstr_gap": -1.0,
-      "composite_utility": 0.9727,
-      "privacy_score": 0.998,
-      "composite_score": 0.9854,
+      "composite_utility": 0.9668,
+      "privacy_score": 1.0,
+      "composite_score": 0.9834,
       "privacy_pass": true,
       "utility_pass": true,
       "overall_pass": true,
       "model_config": "{\"epochs\": 300, \"batch_size\": 500}",
       "violation_breakdown": "{}",
+      "cmla_notes": "k=10 | threshold=0.0000 (p5 real-real) | leaking=0/1000",
       "is_recommended": false
     },
     {
       "model": "ctgan",
       "singling_out_risk": 0.0,
-      "singling_out_ci": "[0.000, 0.011]",
+      "singling_out_ci": "[0.000, 0.007]",
       "linkability_risk": 0.0,
       "linkability_ci": "[0.000, 0.005]",
       "cmla_risk": 0.0,
-      "correlation_similarity": 0.9227,
+      "correlation_similarity": 0.9127,
       "logic_consistency": 1.0,
       "tstr_score": -1.0,
       "tstr_baseline": -1.0,
       "tstr_gap": -1.0,
-      "composite_utility": 0.9613,
+      "composite_utility": 0.9564,
       "privacy_score": 1.0,
-      "composite_score": 0.9807,
+      "composite_score": 0.9782,
       "privacy_pass": true,
       "utility_pass": true,
       "overall_pass": true,
       "model_config": "{\"epochs\": 300, \"batch_size\": 500}",
       "violation_breakdown": "{}",
+      "cmla_notes": "k=10 | threshold=0.0000 (p5 real-real) | leaking=0/1000",
       "is_recommended": false
     }
   ],
-  "total_runtime_seconds": 97.1
+  "run_config": {
+    "filename": "adult.csv",
+    "max_rows": 2000,
+    "train_ratio": 0.5,
+    "random_seed": 42,
+    "n_attacks": 500,
+    "target_col": null,
+    "privacy_thresholds": {
+      "singling_out": 0.1,
+      "linkability": 0.1,
+      "cmla": 0.1
+    },
+    "utility_thresholds": {
+      "tstr_gap_max": 0.1,
+      "logic_consistency": 0.7,
+      "correlation_similarity": 0.7
+    },
+    "score_weights": {
+      "privacy": 0.5,
+      "utility": 0.5
+    }
+  }
 }
