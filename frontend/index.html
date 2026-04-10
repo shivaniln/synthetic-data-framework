@@ -546,8 +546,8 @@ const state = {
     copula:    { label: "Gaussian Copula",  sub: "Statistical model — fastest, no deep learning",       cfg: {},                                on: true  },
     ctgan:     { label: "CTGAN",            sub: "GAN-based deep learning · 300 training rounds",       cfg: {epochs:300, batch_size:500},     on: true  },
     tvae:      { label: "TVAE",             sub: "VAE-based deep learning · 300 training rounds",       cfg: {epochs:300, batch_size:500},     on: true  },
-    privbayes: { label: "PrivBayes",        sub: "Privacy-guaranteed Bayesian model · ε = 1.0",         cfg: {epsilon:1.0},                    on: false },
-    pategan:   { label: "PATE-GAN",         sub: "Privacy-guaranteed GAN · teacher-student method",     cfg: {epsilon:1.0},                    on: false },
+    privbayes: { label: "PrivBayes",        sub: "Privacy-guaranteed Bayesian model · ε = 1.0",         cfg: {epsilon:1.0},                    on: true  },
+    pategan:   { label: "PATE-GAN",         sub: "Privacy-guaranteed GAN · teacher-student method",     cfg: {epsilon:1.0},                    on: true  },
   },
 };
 
@@ -762,30 +762,109 @@ async function startAudit() {
 
 function stopRun(status) {
   state.running = false;
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  if (logSource)  { logSource.close(); logSource = null; }
   document.getElementById("btnRun").disabled = false;
   document.getElementById("btnRun").innerHTML = "▶ &nbsp;Run Audit";
   document.getElementById("progressBanner").classList.remove("show");
   clearInterval(progressTimer);
-  setStatus(status === "done" ? "Audit complete" : status === "error" ? "Error" : "Ready", status);
+  setStatus(status === "done" ? "Audit complete ✓" : status === "error" ? "Error — check logs" : "Ready", status);
 }
 
 // ═══════════════════════════════════════════════════════════
 //  SSE LOG STREAM
 // ═══════════════════════════════════════════════════════════
+// Strip bare NaN / Infinity tokens that Python's json module can produce.
+// These are valid Python float repr but NOT valid JSON.
+function sanitiseJSON(raw) {
+  return raw
+    .replace(/:\s*NaN/g,       ': null')
+    .replace(/:\s*Infinity/g,  ': null')
+    .replace(/:\s*-Infinity/g, ': null');
+}
+
 function openLogStream() {
   if (logSource) { logSource.close(); logSource = null; }
   logSource = new EventSource("/api/logs");
+
   logSource.onmessage = e => {
-    const item = JSON.parse(e.data);
+    let item;
+    try { item = JSON.parse(e.data); } catch(parseErr) {
+      addLog("warn", "Could not parse server message: " + e.data.slice(0, 120));
+      return;
+    }
+
+    // Skip keepalive comments (they start with ":")
+    if (!item || !item.level) return;
+
     addLog(item.level, item.message, item.ts);
     updateProgress(item.message);
+
     if (item.level === "done") {
-      try { renderResults(JSON.parse(item.message)); } catch(_) {}
-      stopRun("done");
       logSource.close();
+      logSource = null;
+      stopRun("done");
+      // Parse the summary from item.message and render results
+      let summary = null;
+      try {
+        summary = JSON.parse(sanitiseJSON(item.message));
+      } catch(err) {
+        addLog("error", "Could not parse results JSON: " + err.message);
+        addLog("warn", "Falling back to /api/results poll...");
+      }
+      if (summary && summary.results && summary.results.length > 0) {
+        renderResults(summary);
+      } else {
+        // Fallback: fetch from /api/results endpoint
+        fetchAndRenderResults();
+      }
     }
   };
-  logSource.onerror = () => { /* connection will auto-reconnect */ };
+
+  logSource.onerror = (e) => {
+    // Only log if we are actually mid-run (not a normal post-done close)
+    if (state.running) {
+      addLog("warn", "Log stream disconnected — polling for results...");
+      pollForCompletion();
+    }
+  };
+}
+
+// Polling fallback — used when SSE connection drops or done event parse fails
+let _pollTimer = null;
+function pollForCompletion() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(async () => {
+    try {
+      const r = await fetch("/api/status");
+      const s = await r.json();
+      if (!s.running) {
+        clearInterval(_pollTimer);
+        _pollTimer = null;
+        await fetchAndRenderResults();
+        stopRun("done");
+      }
+    } catch(e) { /* keep polling */ }
+  }, 2000);
+}
+
+async function fetchAndRenderResults() {
+  try {
+    const r = await fetch("/api/results");
+    if (!r.ok) { addLog("error", "Could not fetch results from server."); return; }
+    const raw = await r.text();
+    let summary;
+    try {
+      summary = JSON.parse(sanitiseJSON(raw));
+    } catch(parseErr) {
+      addLog("error", "fetchAndRenderResults parse error: " + parseErr.message);
+      return;
+    }
+    if (summary.error) { addLog("error", summary.error); return; }
+    renderResults(summary);
+  } catch(err) {
+    addLog("error", "fetchAndRenderResults failed: " + err.message);
+  }
 }
 
 function addLog(level, msg, ts) {
@@ -840,22 +919,42 @@ function updateProgress(msg) {
 //  RENDER RESULTS
 // ═══════════════════════════════════════════════════════════
 function renderResults(summary) {
-  const results   = summary.results || [];
+  if (!summary || !summary.results) {
+    addLog("error", "renderResults: summary is empty or missing results field.");
+    return;
+  }
+
+  // Normalise overall_pass — backend may send boolean true or string "True"
+  const results = summary.results.map(r => ({
+    ...r,
+    overall_pass: r.overall_pass === true || r.overall_pass === "True" || r.overall_pass === "true",
+  }));
+
   const bestModel = summary.recommended_model;
-  const passed    = summary.threshold_passed;
+  const passed    = summary.threshold_passed === true || summary.threshold_passed === "True";
 
   document.getElementById("resultsSection").classList.add("show");
   document.getElementById("placeholder").style.display = "none";
   document.getElementById("resultsBadge").textContent  = `${results.length} model${results.length!==1?"s":""}`;
 
-  renderModelCards(results, bestModel);
-  renderChart(results, bestModel);
-  renderAttackBreakdown(results, bestModel);
-  renderTable(results, bestModel);
-  renderVerdict(summary);
+  try { renderModelCards(results, bestModel); }
+  catch(e) { addLog("error", "renderModelCards failed: " + e.message); }
+  try { renderChart(results, bestModel); }
+  catch(e) { addLog("error", "renderChart failed: " + e.message); }
+  try { renderAttackBreakdown(results, bestModel); }
+  catch(e) { addLog("error", "renderAttackBreakdown failed: " + e.message); }
+  try { renderTable(results, bestModel); }
+  catch(e) { addLog("error", "renderTable failed: " + e.message); }
+  try { renderVerdict({...summary, threshold_passed: passed, results}); }
+  catch(e) { addLog("error", "renderVerdict failed: " + e.message); }
 }
 
 // ── Model cards ────────────────────────────────────────────
+function modelStateKey(name) {
+  // Map backend model name strings back to the state object keys
+  return name.toLowerCase().replace(/-/g,"").replace(/_/g,"").replace(/gaussian/g,"").replace(/copula/g,"copula").trim();
+}
+
 function renderModelCards(results, bestModel) {
   const grid = document.getElementById("modelsGrid");
   grid.innerHTML = "";
@@ -892,7 +991,7 @@ function renderModelCards(results, bestModel) {
       <div class="mc-head">
         <div>
           <div class="mc-name">${r.model}</div>
-          <div class="mc-type">${state.models[r.model]?.sub || ""}</div>
+          <div class="mc-type">${state.models[modelStateKey(r.model)]?.sub || ""}</div>
         </div>
         <span class="mc-badge ${badgeClass}">${badgeText}</span>
       </div>
@@ -927,7 +1026,7 @@ function renderChart(results, bestModel) {
     const skip   = r.composite_score === 0 && r.singling_out_risk === 1;
     const colorKey = isBest ? "best" : pass ? "pass" : skip ? "skipped" : "fail";
 
-    // X = risk (0–30%), Y = utility (0–100%)
+    // X = risk (0–30%),  Y = utility (0–100%)
     const riskMax  = Math.max(r.singling_out_risk, r.linkability_risk, r.cmla_risk);
     const utilAvg  = (r.logic_consistency + r.correlation_similarity) / 2;
     const cx = 48 + (riskMax / 0.30) * (340 - 48);

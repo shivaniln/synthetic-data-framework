@@ -15,6 +15,7 @@ Then open http://localhost:5000 in your browser.
 
 import json
 import logging
+import math
 import os
 import queue
 import threading
@@ -24,6 +25,36 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.utils import secure_filename
+
+
+# ─── JSON safety ──────────────────────────────────────────────────────────────
+# Python's json module writes float('nan') as the bare token NaN which is not
+# valid JSON. This encoder replaces NaN/Inf with null at the serialisation layer,
+# so it is impossible for bad tokens to appear regardless of input source.
+
+class _SafeEncoder(json.JSONEncoder):
+    def iterencode(self, o, _one_shot=False):
+        # Pre-process the entire object tree before encoding
+        return super().iterencode(self._clean(o), _one_shot)
+
+    def _clean(self, obj):
+        if isinstance(obj, dict):
+            return {k: self._clean(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [self._clean(v) for v in obj]
+        if isinstance(obj, float):
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+            return obj
+        # numpy scalars
+        if hasattr(obj, "item"):
+            return self._clean(obj.item())
+        return obj
+
+
+def safe_dumps(obj) -> str:
+    """json.dumps that converts NaN/Inf/numpy scalars to JSON-safe values."""
+    return json.dumps(obj, cls=_SafeEncoder)
 
 from src.data_loader import DataLoader, LoaderConfig
 from src.models.base_generator import build_generator, GENERATOR_REGISTRY
@@ -38,8 +69,26 @@ OUTPUT_DIR = Path("data/output")
 INPUT_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-log_queue: queue.Queue = queue.Queue()
+# Per-connection queues — each SSE client gets its own queue so reconnects
+# don't steal messages from the active connection.
+_subscribers: list = []
+_subscribers_lock = threading.Lock()
 run_state = {"running": False, "last_result": None}
+
+
+def _new_subscriber() -> queue.Queue:
+    q: queue.Queue = queue.Queue()
+    with _subscribers_lock:
+        _subscribers.append(q)
+    return q
+
+
+def _remove_subscriber(q: queue.Queue) -> None:
+    with _subscribers_lock:
+        try:
+            _subscribers.remove(q)
+        except ValueError:
+            pass
 
 
 def allowed_file(filename: str) -> bool:
@@ -47,7 +96,10 @@ def allowed_file(filename: str) -> bool:
 
 
 def emit(level: str, message: str) -> None:
-    log_queue.put({"level": level, "message": message, "ts": time.strftime("%H:%M:%S")})
+    item = {"level": level, "message": message, "ts": time.strftime("%H:%M:%S")}
+    with _subscribers_lock:
+        for q in list(_subscribers):
+            q.put(item)
     logging.getLogger("midst.app").log(
         {"info": logging.INFO, "warn": logging.WARNING, "error": logging.ERROR}.get(level, logging.INFO),
         message,
@@ -100,8 +152,7 @@ def run_audit():
     if not body or "filename" not in body:
         return jsonify({"error": "Missing 'filename' in body"}), 400
 
-    while not log_queue.empty():
-        log_queue.get_nowait()
+    # New per-connection queues are created fresh per SSE connection — no clearing needed.
 
     run_state["running"] = True
     run_state["last_result"] = None
@@ -273,6 +324,10 @@ def _run_pipeline(config: dict) -> None:
                 emit("warn", "Plot skipped (matplotlib issue).")
 
         elapsed = round(time.perf_counter() - t_start, 1)
+
+        # Build the summary. safe_dumps() / _SafeEncoder handles NaN, Inf,
+        # numpy bools, and numpy scalars at the serialisation layer — nothing
+        # can produce invalid JSON tokens regardless of what pandas returns.
         summary = {
             "recommended_model":     best_name,
             "threshold_passed":      bool(not passing.empty),
@@ -280,12 +335,15 @@ def _run_pipeline(config: dict) -> None:
             "results":               report_df.to_dict(orient="records"),
             "run_config":            {k: v for k, v in config.items() if k != "models"},
         }
+        # Write to disk using the safe encoder
         with open(OUTPUT_DIR / "audit_summary.json", "w") as f:
-            json.dump(summary, f, indent=2, default=str)
+            f.write(safe_dumps(summary))
+            f.write("\n")
 
         run_state["last_result"] = summary
         emit("info", f"Audit complete in {elapsed}s")
-        emit("done", json.dumps(summary))   # frontend listens for this event type
+        # safe_dumps() guarantees no NaN/Inf — JSON.parse() will always succeed.
+        emit("done", safe_dumps(summary))
 
     except Exception:
         emit("error", f"Unexpected error:\n{traceback.format_exc()}")
@@ -293,18 +351,50 @@ def _run_pipeline(config: dict) -> None:
         run_state["running"] = False
 
 
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _failed_record(model_name: str, reason: str) -> dict:
+    """Placeholder row inserted when a model errors out, so the run continues."""
+    return {
+        "model":                  model_name,
+        "singling_out_risk":      1.0, "singling_out_ci": "N/A",
+        "linkability_risk":       1.0, "linkability_ci":  "N/A",
+        "cmla_risk":              1.0,
+        "correlation_similarity": 0.0, "logic_consistency":  0.0,
+        "tstr_score":  -1.0, "tstr_baseline": -1.0, "tstr_gap": -1.0,
+        "composite_utility": 0.0, "privacy_score": 0.0, "composite_score": 0.0,
+        "privacy_pass": False, "utility_pass": False, "overall_pass": False,
+        "model_config": "{}", "violation_breakdown": "{}", "cmla_notes": "",
+        "notes": reason,
+    }
+
+
 # ─── SSE log stream ───────────────────────────────────────────────────────────
 
 @app.route("/api/logs")
 def stream_logs():
+    """
+    Each browser connection gets its own queue.
+    emit() broadcasts to every active queue simultaneously,
+    so reconnects or multiple tabs never steal each other's messages.
+    """
+    my_queue = _new_subscriber()
+
     def generate():
-        yield "retry: 1000\n\n"
-        while True:
-            try:
-                item = log_queue.get(timeout=30)
-                yield f"data: {json.dumps(item)}\n\n"
-            except queue.Empty:
-                yield ": keepalive\n\n"
+        try:
+            yield "retry: 1000\n\n"
+            while True:
+                try:
+                    item = my_queue.get(timeout=30)
+                    yield f"data: {json.dumps(item)}\n\n"
+                    # Close the generator after sending "done" so the HTTP response ends cleanly.
+                    if item.get("level") == "done":
+                        return
+                except queue.Empty:
+                    yield ": keepalive\n\n"
+        finally:
+            _remove_subscriber(my_queue)
+
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
@@ -314,10 +404,16 @@ def stream_logs():
 @app.route("/api/results")
 def get_results():
     path = OUTPUT_DIR / "audit_summary.json"
-    if path.exists():
-        with open(path) as f:
-            return jsonify(json.load(f))
-    return jsonify({"error": "No results yet."}), 404
+    if not path.exists():
+        return jsonify({"error": "No results yet."}), 404
+    # Read the raw text and replace any bare NaN/Infinity tokens that slipped
+    # through — these are invalid JSON but valid Python float repr.
+    raw = path.read_text(encoding="utf-8")
+    raw = raw.replace(": NaN",  ": null")              .replace(":NaN",   ":null")              .replace(": Infinity",  ": null")              .replace(": -Infinity", ": null")
+    try:
+        return app.response_class(raw, mimetype="application/json")
+    except Exception:
+        return jsonify({"error": "Could not parse audit_summary.json"}), 500
 
 
 @app.route("/api/status")

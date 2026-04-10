@@ -222,11 +222,17 @@ class PrivBayesGenerator(BaseGenerator):
         try:
             from snsynth import Synthesizer
             epsilon = self.kwargs.get("epsilon", 1.0)
-            self._model = Synthesizer.create("privbayes", epsilon=epsilon)
+            # smartnoise-synth uses "mst" (Maximum Spanning Tree) — NOT "privbayes"
+            self._model = Synthesizer.create("mst", epsilon=epsilon)
             self._epsilon = epsilon
         except ImportError:
             raise ImportError(
                 "PrivBayes requires smartnoise-synth: pip install smartnoise-synth"
+            )
+        except (ValueError, Exception) as exc:
+            raise ImportError(
+                f"PrivBayes could not initialise — {exc}. "
+                "Install: pip install smartnoise-synth"
             )
 
     def _fit(self, df: pd.DataFrame) -> None:
@@ -260,6 +266,11 @@ class PATEGANGenerator(BaseGenerator):
         except ImportError:
             raise ImportError(
                 "PATE-GAN requires smartnoise-synth: pip install smartnoise-synth"
+            )
+        except (ValueError, Exception) as exc:
+            raise ImportError(
+                f"PATE-GAN could not initialise — {exc}. "
+                "Install: pip install smartnoise-synth"
             )
 
     def _fit(self, df: pd.DataFrame) -> None:
