@@ -2,7 +2,7 @@
 models/base_generator.py — MIDST Framework
 
 Abstract base class for all synthetic data generators.
-Every model (Copula, CTGAN, TVAE, PrivBayes, PATE-GAN...) is a subclass.
+Every supported model (Copula, CTGAN, and TVAE) is a subclass.
 The controller (main.py) only ever calls .fit() and .sample() —
 it never needs to know which model it's running.
 """
@@ -203,87 +203,6 @@ class TVAEGenerator(BaseGenerator):
 
 
 # =============================================================================
-# Planned models — stubs so the interface is established before implementation
-# =============================================================================
-
-class PrivBayesGenerator(BaseGenerator):
-    """
-    PrivBayes — Differentially private Bayesian network.
-    Uses the `smartnoise-synth` library.
-
-    Install: pip install smartnoise-synth
-    """
-
-    @property
-    def name(self) -> str:
-        return "PrivBayes"
-
-    def _build_model(self) -> None:
-        try:
-            from snsynth import Synthesizer
-            epsilon = self.kwargs.get("epsilon", 1.0)
-            # smartnoise-synth uses "mst" (Maximum Spanning Tree) — NOT "privbayes"
-            self._model = Synthesizer.create("mst", epsilon=epsilon)
-            self._epsilon = epsilon
-        except ImportError:
-            raise ImportError(
-                "PrivBayes requires smartnoise-synth: pip install smartnoise-synth"
-            )
-        except (ValueError, Exception) as exc:
-            raise ImportError(
-                f"PrivBayes could not initialise — {exc}. "
-                "Install: pip install smartnoise-synth"
-            )
-
-    def _fit(self, df: pd.DataFrame) -> None:
-        self._model.fit(df, preprocessor_eps=0.1)
-
-    def _sample(self, n: int) -> pd.DataFrame:
-        return self._model.sample(n)
-
-    def get_config(self) -> dict:
-        return {"epsilon": self.kwargs.get("epsilon", 1.0)}
-
-
-class PATEGANGenerator(BaseGenerator):
-    """
-    PATE-GAN — Teacher-student GAN with formal DP guarantees.
-    Uses the `smartnoise-synth` library.
-
-    Install: pip install smartnoise-synth
-    """
-
-    @property
-    def name(self) -> str:
-        return "PATE-GAN"
-
-    def _build_model(self) -> None:
-        try:
-            from snsynth import Synthesizer
-            epsilon = self.kwargs.get("epsilon", 1.0)
-            self._model = Synthesizer.create("pategan", epsilon=epsilon)
-            self._epsilon = epsilon
-        except ImportError:
-            raise ImportError(
-                "PATE-GAN requires smartnoise-synth: pip install smartnoise-synth"
-            )
-        except (ValueError, Exception) as exc:
-            raise ImportError(
-                f"PATE-GAN could not initialise — {exc}. "
-                "Install: pip install smartnoise-synth"
-            )
-
-    def _fit(self, df: pd.DataFrame) -> None:
-        self._model.fit(df)
-
-    def _sample(self, n: int) -> pd.DataFrame:
-        return self._model.sample(n)
-
-    def get_config(self) -> dict:
-        return {"epsilon": self.kwargs.get("epsilon", 1.0)}
-
-
-# =============================================================================
 # Registry — maps string name to class (used by config-driven main.py)
 # =============================================================================
 
@@ -291,8 +210,6 @@ GENERATOR_REGISTRY: dict[str, type[BaseGenerator]] = {
     "copula":    CopulaGenerator,
     "ctgan":     CTGANGenerator,
     "tvae":      TVAEGenerator,
-    "privbayes": PrivBayesGenerator,
-    "pategan":   PATEGANGenerator,
 }
 
 

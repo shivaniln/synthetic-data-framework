@@ -23,5 +23,3 @@ flask>=3.0.0
 flask-cors>=4.0.0
 
 # Optional — Differential Privacy models
-# Uncomment when you're ready to use PrivBayes / PATE-GAN:
-# smartnoise-synth>=0.3.0
